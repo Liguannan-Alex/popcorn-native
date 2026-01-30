@@ -22,7 +22,8 @@ jobs:
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
-          vcpkgGitCommitId: '2024.01.12'  # 使用稳定版本
+          # 使用完整的 commit SHA (2024.01.12 release)
+          vcpkgGitCommitId: 'a34c873a9717a888f58dc05571dde15571e8d776'
 
       - name: Install dependencies
         run: |
