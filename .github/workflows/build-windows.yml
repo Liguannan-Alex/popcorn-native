@@ -1,0 +1,144 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  # 允许手动触发
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '2024.01.12'  # 使用稳定版本
+
+      - name: Install dependencies
+        run: |
+          vcpkg install sdl2:x64-windows opencv4:x64-windows glew:x64-windows
+        shell: cmd
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Prepare release package
+        run: |
+          mkdir -p release/PopcornBattle
+
+          # 复制可执行文件
+          cp build/bin/${{ env.BUILD_TYPE }}/PopcornBattle.exe release/PopcornBattle/
+
+          # 复制资源文件
+          if (Test-Path assets) {
+            cp -r assets release/PopcornBattle/
+          }
+
+          # 复制 vcpkg 安装的 DLL
+          $vcpkgBin = "${{ github.workspace }}/vcpkg/installed/x64-windows/bin"
+
+          # SDL2
+          cp "$vcpkgBin/SDL2.dll" release/PopcornBattle/
+
+          # GLEW
+          if (Test-Path "$vcpkgBin/glew32.dll") {
+            cp "$vcpkgBin/glew32.dll" release/PopcornBattle/
+          }
+
+          # OpenCV DLLs
+          Get-ChildItem "$vcpkgBin" -Filter "opencv*.dll" | ForEach-Object {
+            cp $_.FullName release/PopcornBattle/
+          }
+
+          # 其他可能需要的 DLL
+          $dlls = @("zlib1.dll", "libpng16.dll", "jpeg62.dll", "tiff.dll", "webp.dll")
+          foreach ($dll in $dlls) {
+            $path = "$vcpkgBin/$dll"
+            if (Test-Path $path) {
+              cp $path release/PopcornBattle/
+            }
+          }
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PopcornBattle-Windows-x64
+          path: release/PopcornBattle/
+          retention-days: 30
+
+  # macOS 构建（可选）
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install cmake sdl2 opencv
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+      - name: Prepare release package
+        run: |
+          mkdir -p release/PopcornBattle.app/Contents/MacOS
+          mkdir -p release/PopcornBattle.app/Contents/Resources
+
+          # 复制可执行文件
+          cp build/bin/PopcornBattle release/PopcornBattle.app/Contents/MacOS/
+
+          # 复制资源
+          if [ -d assets ]; then
+            cp -r assets release/PopcornBattle.app/Contents/Resources/
+          fi
+
+          # 创建 Info.plist
+          cat > release/PopcornBattle.app/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>PopcornBattle</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.popcorn.battle</string>
+            <key>CFBundleName</key>
+            <string>Popcorn Battle</string>
+            <key>CFBundleVersion</key>
+            <string>1.0.0</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PopcornBattle-macOS
+          path: release/
+          retention-days: 30
