@@ -58,6 +58,21 @@ if(WIN32)
     find_package(GLEW REQUIRED)
 endif()
 
+# SDL_ttf (可选，用于文字渲染)
+find_package(SDL2_ttf QUIET)
+if(NOT SDL2_ttf_FOUND)
+    # 尝试其他查找方式
+    find_library(SDL2_TTF_LIB SDL2_ttf)
+    find_path(SDL2_TTF_INCLUDE SDL_ttf.h PATH_SUFFIXES SDL2)
+    if(SDL2_TTF_LIB AND SDL2_TTF_INCLUDE)
+        set(SDL2_TTF_FOUND TRUE)
+        message(STATUS "Found SDL2_ttf: ${SDL2_TTF_LIB}")
+    else()
+        message(STATUS "SDL2_ttf not found - text rendering will be disabled")
+        set(SDL2_TTF_FOUND FALSE)
+    endif()
+endif()
+
 # ============================================================
 # 源文件
 # ============================================================
@@ -72,6 +87,8 @@ set(SOURCES
     src/detection/GestureDetector.cpp
     src/game/GameEngine.cpp
     src/game/CollisionSystem.cpp
+    src/render/ParticleSystem.cpp
+    src/render/TextRenderer.cpp
 )
 
 set(HEADERS
@@ -84,6 +101,9 @@ set(HEADERS
     src/game/GameEngine.h
     src/game/CollisionSystem.h
     src/game/FallingItem.h
+    src/game/GameConfig.h
+    src/render/ParticleSystem.h
+    src/render/TextRenderer.h
 )
 
 # ============================================================
@@ -119,6 +139,18 @@ endif()
 # Windows 额外链接 GLEW
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE GLEW::GLEW)
+endif()
+
+# SDL_ttf
+if(SDL2_ttf_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE SDL2_ttf::SDL2_ttf)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_SDL_TTF)
+    message(STATUS "SDL_ttf enabled via package")
+elseif(SDL2_TTF_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${SDL2_TTF_INCLUDE})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${SDL2_TTF_LIB})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_SDL_TTF)
+    message(STATUS "SDL_ttf enabled via manual path")
 endif()
 
 # ============================================================
@@ -172,6 +204,11 @@ if(onnxruntime_FOUND OR ONNXRUNTIME_FOUND)
     message(STATUS "  ONNX Runtime: Enabled")
 else()
     message(STATUS "  ONNX Runtime: Disabled (pose detection unavailable)")
+endif()
+if(SDL2_ttf_FOUND OR SDL2_TTF_FOUND)
+    message(STATUS "  SDL2_ttf: Enabled")
+else()
+    message(STATUS "  SDL2_ttf: Disabled (text rendering unavailable)")
 endif()
 message(STATUS "============================================================")
 message(STATUS "")

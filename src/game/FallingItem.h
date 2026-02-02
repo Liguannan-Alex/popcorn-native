@@ -1,17 +1,9 @@
 #pragma once
 
 #include <string>
+#include "GameConfig.h"
 
 namespace popcorn {
-
-/**
- * 掉落物类型
- */
-enum class ItemType {
-    Popcorn,    // 爆米花（加分）
-    Bomb,       // 炸弹（扣分）
-    Special     // 特殊道具
-};
 
 /**
  * 掉落物
@@ -22,37 +14,62 @@ struct FallingItem {
 
     float x{0.0f};          // 位置 X
     float y{0.0f};          // 位置 Y
-    float size{40.0f};      // 尺寸
-    float speed{200.0f};    // 下落速度（像素/秒）
+    float size{65.0f};      // 尺寸
+    float speed{400.0f};    // 下落速度（像素/秒）
 
-    float rotation{0.0f};   // 旋转角度
-    float rotationSpeed{0.0f}; // 旋转速度
+    float rotation{0.0f};       // 旋转角度（度）
+    float rotationSpeed{0.0f};  // 旋转速度（度/秒）
 
     bool active{true};      // 是否激活
+    bool captured{false};   // 是否已被捕获
+    float captureAlpha{1.0f}; // 捕获动画透明度
 
-    // 根据类型获取颜色
-    void getColor(float& r, float& g, float& b) const {
-        switch (type) {
-            case ItemType::Popcorn:
-                r = 1.0f; g = 0.9f; b = 0.3f; // 黄色
-                break;
-            case ItemType::Bomb:
-                r = 0.2f; g = 0.2f; b = 0.2f; // 黑色
-                break;
-            case ItemType::Special:
-                r = 0.3f; g = 0.8f; b = 1.0f; // 蓝色
-                break;
+    uint32_t color{Colors::Popcorn};  // 颜色
+    std::string emoji{"🍿"};           // Emoji
+
+    // 从配置初始化
+    void initFromConfig(ItemType itemType) {
+        type = itemType;
+        auto it = ITEM_CONFIGS.find(itemType);
+        if (it != ITEM_CONFIGS.end()) {
+            const auto& config = it->second;
+            size = config.size;
+            color = config.color;
+            emoji = config.emoji;
         }
     }
 
     // 获取分数
     int getScore() const {
-        switch (type) {
-            case ItemType::Popcorn: return 10;
-            case ItemType::Bomb: return -20;
-            case ItemType::Special: return 50;
-            default: return 0;
+        auto it = ITEM_CONFIGS.find(type);
+        if (it != ITEM_CONFIGS.end()) {
+            return it->second.score;
         }
+        return 0;
+    }
+
+    // 是否为炸弹
+    bool isBomb() const {
+        return type == ItemType::Bomb;
+    }
+
+    // 是否为高价值物品（50分以上）
+    bool isHighValue() const {
+        return getScore() >= 50;
+    }
+
+    // 获取颜色分量（0-1范围）
+    void getColorRGB(float& r, float& g, float& b) const {
+        r = ((color >> 16) & 0xFF) / 255.0f;
+        g = ((color >> 8) & 0xFF) / 255.0f;
+        b = (color & 0xFF) / 255.0f;
+    }
+
+    // 获取颜色分量（0-255范围）
+    void getColorRGB255(uint8_t& r, uint8_t& g, uint8_t& b) const {
+        r = (color >> 16) & 0xFF;
+        g = (color >> 8) & 0xFF;
+        b = color & 0xFF;
     }
 };
 
