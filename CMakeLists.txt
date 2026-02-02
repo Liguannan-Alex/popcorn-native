@@ -23,13 +23,25 @@ find_package(OpenGL REQUIRED)
 # OpenCV (用于摄像头采集)
 find_package(OpenCV REQUIRED COMPONENTS core videoio imgproc highgui)
 
+# ONNX Runtime (用于姿态检测)
+find_package(onnxruntime CONFIG QUIET)
+if(NOT onnxruntime_FOUND)
+    # 如果 vcpkg 没找到，尝试手动查找
+    find_library(ONNXRUNTIME_LIB onnxruntime HINTS ${ONNXRUNTIME_ROOT}/lib)
+    find_path(ONNXRUNTIME_INCLUDE onnxruntime_cxx_api.h HINTS ${ONNXRUNTIME_ROOT}/include)
+    if(ONNXRUNTIME_LIB AND ONNXRUNTIME_INCLUDE)
+        message(STATUS "Found ONNX Runtime: ${ONNXRUNTIME_LIB}")
+        set(ONNXRUNTIME_FOUND TRUE)
+    else()
+        message(WARNING "ONNX Runtime not found. Pose detection will be disabled.")
+        set(ONNXRUNTIME_FOUND FALSE)
+    endif()
+endif()
+
 # GLEW (Windows 需要)
 if(WIN32)
     find_package(GLEW REQUIRED)
 endif()
-
-# MediaPipe (需要单独配置，见下方说明)
-# find_package(MediaPipe REQUIRED)
 
 # ============================================================
 # 源文件
@@ -44,7 +56,6 @@ set(SOURCES
     src/detection/PoseDetector.cpp
     src/game/GameEngine.cpp
     src/game/CollisionSystem.cpp
-    # src/ui/ImGuiLayer.cpp  # 后续添加
 )
 
 set(HEADERS
@@ -55,7 +66,7 @@ set(HEADERS
     src/detection/PoseDetector.h
     src/game/GameEngine.h
     src/game/CollisionSystem.h
-    src/game/FallingItem.h  # Header-only
+    src/game/FallingItem.h
 )
 
 # ============================================================
@@ -68,16 +79,25 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${SDL2_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
-    ${CMAKE_SOURCE_DIR}/third_party/glad/include
-    ${CMAKE_SOURCE_DIR}/third_party/imgui
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${SDL2_LIBRARIES}
     OpenGL::GL
     ${OpenCV_LIBS}
-    # MediaPipe::MediaPipe  # 后续添加
 )
+
+# ONNX Runtime
+if(onnxruntime_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE onnxruntime::onnxruntime)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_ONNXRUNTIME)
+    message(STATUS "ONNX Runtime enabled via vcpkg")
+elseif(ONNXRUNTIME_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${ONNXRUNTIME_INCLUDE})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${ONNXRUNTIME_LIB})
+    target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_ONNXRUNTIME)
+    message(STATUS "ONNX Runtime enabled via manual path")
+endif()
 
 # Windows 额外链接 GLEW
 if(WIN32)
@@ -131,5 +151,10 @@ message(STATUS "  Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  SDL2: ${SDL2_INCLUDE_DIRS}")
 message(STATUS "  OpenCV: ${OpenCV_VERSION}")
+if(onnxruntime_FOUND OR ONNXRUNTIME_FOUND)
+    message(STATUS "  ONNX Runtime: Enabled")
+else()
+    message(STATUS "  ONNX Runtime: Disabled (pose detection unavailable)")
+endif()
 message(STATUS "============================================================")
 message(STATUS "")

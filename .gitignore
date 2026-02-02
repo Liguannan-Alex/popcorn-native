@@ -29,6 +29,7 @@ Thumbs.db
 # Logs
 *.log
 
-# MediaPipe models (download separately)
+# AI Models (download separately, too large for git)
 assets/models/*.task
 assets/models/*.tflite
+assets/models/*.onnx

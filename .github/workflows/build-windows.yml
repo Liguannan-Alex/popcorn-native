@@ -5,7 +5,6 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
-  # 允许手动触发
   workflow_dispatch:
 
 env:
@@ -24,7 +23,15 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
-          .\vcpkg install sdl2:x64-windows opencv4:x64-windows glew:x64-windows
+          .\vcpkg install sdl2:x64-windows opencv4:x64-windows glew:x64-windows onnxruntime-gpu:x64-windows
+        shell: pwsh
+
+      - name: Download MoveNet model
+        run: |
+          mkdir -p assets/models
+          # 下载 MoveNet Lightning ONNX 模型
+          Invoke-WebRequest -Uri "https://github.com/PINTO0309/PINTO_model_zoo/raw/main/115_MoveNet/resources/saved_model_192x192/model_float32.onnx" -OutFile "assets/models/movenet_lightning.onnx"
+          Write-Host "Downloaded MoveNet model to assets/models/movenet_lightning.onnx"
         shell: pwsh
 
       - name: Configure CMake
@@ -43,7 +50,7 @@ jobs:
           # 复制可执行文件
           cp build/bin/${{ env.BUILD_TYPE }}/PopcornBattle.exe release/PopcornBattle/
 
-          # 复制资源文件
+          # 复制资源文件（包含模型）
           if (Test-Path assets) {
             cp -r assets release/PopcornBattle/
           }
@@ -51,47 +58,16 @@ jobs:
           # 复制 vcpkg 安装的 DLL
           $vcpkgBin = "${{ github.workspace }}/vcpkg/installed/x64-windows/bin"
 
-          # SDL2
-          cp "$vcpkgBin/SDL2.dll" release/PopcornBattle/
-
-          # GLEW
-          if (Test-Path "$vcpkgBin/glew32.dll") {
-            cp "$vcpkgBin/glew32.dll" release/PopcornBattle/
-          }
-
-          # OpenCV DLLs
-          Get-ChildItem "$vcpkgBin" -Filter "opencv*.dll" | ForEach-Object {
-            cp $_.FullName release/PopcornBattle/
-          }
-
-          # 其他可能需要的 DLL
-          $dlls = @(
-            "zlib1.dll",
-            "libpng16.dll",
-            "jpeg62.dll",
-            "tiff.dll",
-            "webp.dll",
-            "libwebp.dll",
-            "libwebpdecoder.dll",
-            "libwebpdemux.dll",
-            "libwebpmux.dll",
-            "libsharpyuv.dll"
-          )
-          foreach ($dll in $dlls) {
-            $path = "$vcpkgBin/$dll"
-            if (Test-Path $path) {
-              cp $path release/PopcornBattle/
-              Write-Host "Copied: $dll"
-            }
-          }
-
-          # 复制所有可能遗漏的 DLL（保险起见）
+          # 复制所有 DLL
           Get-ChildItem "$vcpkgBin" -Filter "*.dll" | ForEach-Object {
-            $dest = "release/PopcornBattle/$($_.Name)"
-            if (-not (Test-Path $dest)) {
-              cp $_.FullName $dest
-              Write-Host "Extra: $($_.Name)"
-            }
+            cp $_.FullName "release/PopcornBattle/$($_.Name)"
+            Write-Host "Copied: $($_.Name)"
+          }
+
+          # 列出最终文件
+          Write-Host "`n=== Release Package Contents ==="
+          Get-ChildItem "release/PopcornBattle" -Recurse | ForEach-Object {
+            Write-Host $_.FullName
           }
         shell: pwsh
 
@@ -102,7 +78,6 @@ jobs:
           path: release/PopcornBattle/
           retention-days: 30
 
-  # macOS 构建（可选）
   build-macos:
     runs-on: macos-latest
 
@@ -112,7 +87,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          brew install cmake sdl2 opencv
+          brew install cmake sdl2 opencv onnxruntime
+
+      - name: Download MoveNet model
+        run: |
+          mkdir -p assets/models
+          curl -L -o assets/models/movenet_lightning.onnx "https://github.com/PINTO0309/PINTO_model_zoo/raw/main/115_MoveNet/resources/saved_model_192x192/model_float32.onnx"
+          echo "Downloaded MoveNet model"
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
@@ -128,7 +109,7 @@ jobs:
           # 复制可执行文件
           cp build/bin/PopcornBattle release/PopcornBattle.app/Contents/MacOS/
 
-          # 复制资源
+          # 复制资源（包含模型）
           if [ -d assets ]; then
             cp -r assets release/PopcornBattle.app/Contents/Resources/
           fi

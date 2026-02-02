@@ -44,13 +44,14 @@ bool Application::initialize(int width, int height, const std::string& title) {
         return false;
     }
 
-    // 4. 初始化姿态检测器
+    // 4. 初始化姿态检测器 (MoveNet via ONNX Runtime)
     std::cout << "[Application] Initializing pose detector...\n";
     m_poseDetector = std::make_unique<PoseDetector>();
-    if (!m_poseDetector->initialize("assets/models/pose_landmarker_lite.task")) {
+    if (!m_poseDetector->initialize("assets/models/movenet_lightning.onnx")) {
         std::cerr << "[Application] Failed to initialize pose detector\n";
-        // 暂时允许失败，后续添加 MediaPipe
         std::cout << "[Application] Warning: Pose detector not available, continuing without it\n";
+    } else {
+        std::cout << "[Application] Pose detector initialized successfully!\n";
     }
 
     // 5. 初始化游戏引擎
