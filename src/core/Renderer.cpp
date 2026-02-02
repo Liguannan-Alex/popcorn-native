@@ -1,10 +1,18 @@
 #include "Renderer.h"
 
-#include <iostream>
+// Windows MSVC 需要此宏才能使用 M_PI
+#define _USE_MATH_DEFINES
 #include <cmath>
+
+#include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <vector>
+
+// 如果 M_PI 仍未定义（某些编译器）
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 // OpenGL 头文件（跨平台）
 #ifdef __APPLE__
