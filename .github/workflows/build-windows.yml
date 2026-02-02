@@ -65,11 +65,32 @@ jobs:
           }
 
           # 其他可能需要的 DLL
-          $dlls = @("zlib1.dll", "libpng16.dll", "jpeg62.dll", "tiff.dll", "webp.dll")
+          $dlls = @(
+            "zlib1.dll",
+            "libpng16.dll",
+            "jpeg62.dll",
+            "tiff.dll",
+            "webp.dll",
+            "libwebp.dll",
+            "libwebpdecoder.dll",
+            "libwebpdemux.dll",
+            "libwebpmux.dll",
+            "libsharpyuv.dll"
+          )
           foreach ($dll in $dlls) {
             $path = "$vcpkgBin/$dll"
             if (Test-Path $path) {
               cp $path release/PopcornBattle/
+              Write-Host "Copied: $dll"
+            }
+          }
+
+          # 复制所有可能遗漏的 DLL（保险起见）
+          Get-ChildItem "$vcpkgBin" -Filter "*.dll" | ForEach-Object {
+            $dest = "release/PopcornBattle/$($_.Name)"
+            if (-not (Test-Path $dest)) {
+              cp $_.FullName $dest
+              Write-Host "Extra: $($_.Name)"
             }
           }
         shell: pwsh
