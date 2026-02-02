@@ -4,17 +4,33 @@
 #include <cmath>
 #include <fstream>
 
-// ONNX Runtime
+// ONNX Runtime (条件编译)
+#ifdef HAS_ONNXRUNTIME
 #include <onnxruntime_cxx_api.h>
 
 #ifdef _WIN32
 // DirectML for GPU acceleration on Windows
 #include <dml_provider_factory.h>
 #endif
+#endif
 
 namespace popcorn {
 
-PoseDetector::PoseDetector() = default;
+/**
+ * PoseDetector 内部实现
+ * 使用 ONNX Runtime 加载 MoveNet 模型
+ */
+struct PoseDetector::Impl {
+#ifdef HAS_ONNXRUNTIME
+    std::unique_ptr<Ort::Env> env;
+    std::unique_ptr<Ort::Session> session;
+    std::unique_ptr<Ort::SessionOptions> sessionOptions;
+    std::unique_ptr<Ort::MemoryInfo> memoryInfo;
+#endif
+    bool hasModel{false};
+};
+
+PoseDetector::PoseDetector() : m_impl(std::make_unique<Impl>()) {}
 
 PoseDetector::~PoseDetector() {
     shutdown();
@@ -31,19 +47,20 @@ bool PoseDetector::initialize(const std::string& modelPath) {
     }
     file.close();
 
+#ifdef HAS_ONNXRUNTIME
     try {
         // 创建 ONNX Runtime 环境
-        m_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PoseDetector");
+        m_impl->env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PoseDetector");
 
         // 会话选项
-        m_sessionOptions = std::make_unique<Ort::SessionOptions>();
-        m_sessionOptions->SetIntraOpNumThreads(2);
-        m_sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
+        m_impl->sessionOptions = std::make_unique<Ort::SessionOptions>();
+        m_impl->sessionOptions->SetIntraOpNumThreads(2);
+        m_impl->sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
 #ifdef _WIN32
         // Windows: 尝试使用 DirectML (GPU via DirectX)
         try {
-            OrtSessionOptionsAppendExecutionProvider_DML(*m_sessionOptions, 0);
+            OrtSessionOptionsAppendExecutionProvider_DML(*m_impl->sessionOptions, 0);
             std::cout << "[PoseDetector] DirectML GPU acceleration enabled\n";
         } catch (...) {
             std::cout << "[PoseDetector] DirectML not available, using CPU\n";
@@ -54,20 +71,20 @@ bool PoseDetector::initialize(const std::string& modelPath) {
 #ifdef _WIN32
         // Windows 使用宽字符路径
         std::wstring wpath(modelPath.begin(), modelPath.end());
-        m_session = std::make_unique<Ort::Session>(*m_env, wpath.c_str(), *m_sessionOptions);
+        m_impl->session = std::make_unique<Ort::Session>(*m_impl->env, wpath.c_str(), *m_impl->sessionOptions);
 #else
-        m_session = std::make_unique<Ort::Session>(*m_env, modelPath.c_str(), *m_sessionOptions);
+        m_impl->session = std::make_unique<Ort::Session>(*m_impl->env, modelPath.c_str(), *m_impl->sessionOptions);
 #endif
 
         // 内存信息
-        m_memoryInfo = std::make_unique<Ort::MemoryInfo>(
+        m_impl->memoryInfo = std::make_unique<Ort::MemoryInfo>(
             Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault)
         );
 
         // 获取输入信息
         Ort::AllocatorWithDefaultOptions allocator;
-        auto inputName = m_session->GetInputNameAllocated(0, allocator);
-        auto inputShape = m_session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+        auto inputName = m_impl->session->GetInputNameAllocated(0, allocator);
+        auto inputShape = m_impl->session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
 
         std::cout << "[PoseDetector] Input name: " << inputName.get() << "\n";
         std::cout << "[PoseDetector] Input shape: ";
@@ -82,6 +99,7 @@ bool PoseDetector::initialize(const std::string& modelPath) {
             m_inputWidth = static_cast<int>(inputShape[2]);
         }
 
+        m_impl->hasModel = true;
         m_initialized = true;
         std::cout << "[PoseDetector] Initialized successfully! Input size: "
                   << m_inputWidth << "x" << m_inputHeight << "\n";
@@ -94,13 +112,22 @@ bool PoseDetector::initialize(const std::string& modelPath) {
         std::cerr << "[PoseDetector] Error: " << e.what() << "\n";
         return false;
     }
+#else
+    std::cerr << "[PoseDetector] ONNX Runtime not available (HAS_ONNXRUNTIME not defined)\n";
+    return false;
+#endif
 }
 
 void PoseDetector::shutdown() {
-    m_session.reset();
-    m_sessionOptions.reset();
-    m_memoryInfo.reset();
-    m_env.reset();
+#ifdef HAS_ONNXRUNTIME
+    if (m_impl) {
+        m_impl->session.reset();
+        m_impl->sessionOptions.reset();
+        m_impl->memoryInfo.reset();
+        m_impl->env.reset();
+        m_impl->hasModel = false;
+    }
+#endif
     m_initialized = false;
     std::cout << "[PoseDetector] Shutdown complete\n";
 }
@@ -175,6 +202,13 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
         return {};
     }
 
+#ifndef HAS_ONNXRUNTIME
+    return {};
+#else
+    if (!m_impl->hasModel) {
+        return {};
+    }
+
     auto startTime = std::chrono::steady_clock::now();
 
     std::vector<DetectedPerson> persons;
@@ -195,7 +229,7 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
 
         // 创建输入张量 (int32)
         Ort::Value inputTensor = Ort::Value::CreateTensor<int32_t>(
-            *m_memoryInfo,
+            *m_impl->memoryInfo,
             inputData.data(),
             inputSize,
             inputShape.data(),
@@ -204,14 +238,14 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
 
         // 获取输入/输出名称
         Ort::AllocatorWithDefaultOptions allocator;
-        auto inputName = m_session->GetInputNameAllocated(0, allocator);
-        auto outputName = m_session->GetOutputNameAllocated(0, allocator);
+        auto inputName = m_impl->session->GetInputNameAllocated(0, allocator);
+        auto outputName = m_impl->session->GetOutputNameAllocated(0, allocator);
 
         const char* inputNames[] = {inputName.get()};
         const char* outputNames[] = {outputName.get()};
 
         // 推理
-        auto outputTensors = m_session->Run(
+        auto outputTensors = m_impl->session->Run(
             Ort::RunOptions{nullptr},
             inputNames,
             &inputTensor,
@@ -269,6 +303,7 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
     m_lastDetectionTime = std::chrono::duration<float, std::milli>(endTime - startTime).count();
 
     return persons;
+#endif
 }
 
 } // namespace popcorn

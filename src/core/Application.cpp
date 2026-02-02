@@ -3,6 +3,7 @@
 #include "Renderer.h"
 #include "camera/CameraCapture.h"
 #include "detection/PoseDetector.h"
+#include "detection/GestureDetector.h"
 #include "game/GameEngine.h"
 
 #include <iostream>
@@ -54,7 +55,17 @@ bool Application::initialize(int width, int height, const std::string& title) {
         std::cout << "[Application] Pose detector initialized successfully!\n";
     }
 
-    // 5. 初始化游戏引擎
+    // 5. 初始化手势检测器 (用于 OK 手势检测)
+    std::cout << "[Application] Initializing gesture detector...\n";
+    m_gestureDetector = std::make_unique<GestureDetector>();
+    if (!m_gestureDetector->initialize("assets/models/hand_landmarker.task")) {
+        std::cerr << "[Application] Failed to initialize gesture detector\n";
+        std::cout << "[Application] Warning: Using simulation mode for gesture detection\n";
+    } else {
+        std::cout << "[Application] Gesture detector initialized!\n";
+    }
+
+    // 6. 初始化游戏引擎
     std::cout << "[Application] Initializing game engine...\n";
     m_gameEngine = std::make_unique<GameEngine>();
     if (!m_gameEngine->initialize(width, height)) {
@@ -122,27 +133,30 @@ void Application::update(float deltaTime) {
     // 1. 获取摄像头帧
     cv::Mat frame;
     if (m_camera && m_camera->getFrame(frame)) {
+        std::vector<DetectedPerson> persons;
+        GestureResult gesture;
+
         // 2. 姿态检测
         if (m_poseDetector && m_poseDetector->isInitialized()) {
             auto startTime = std::chrono::steady_clock::now();
 
-            auto persons = m_poseDetector->detect(frame);
+            persons = m_poseDetector->detect(frame);
 
             auto endTime = std::chrono::steady_clock::now();
             m_detectionTime = std::chrono::duration<float, std::milli>(endTime - startTime).count();
-
-            // 3. 更新游戏逻辑
-            if (m_gameEngine) {
-                m_gameEngine->update(deltaTime, persons);
-            }
-        } else {
-            // 无检测器时，使用空数据更新
-            if (m_gameEngine) {
-                m_gameEngine->update(deltaTime, {});
-            }
         }
 
-        // 4. 更新渲染器的视频纹理
+        // 3. 手势检测 (用于 OK 手势启动游戏)
+        if (m_gestureDetector && m_gestureDetector->isInitialized()) {
+            gesture = m_gestureDetector->detect(frame);
+        }
+
+        // 4. 更新游戏逻辑
+        if (m_gameEngine) {
+            m_gameEngine->update(deltaTime, persons, gesture);
+        }
+
+        // 5. 更新渲染器的视频纹理
         if (m_renderer) {
             m_renderer->updateVideoTexture(frame);
         }
@@ -204,6 +218,7 @@ void Application::shutdown() {
     m_running = false;
 
     m_gameEngine.reset();
+    m_gestureDetector.reset();
     m_poseDetector.reset();
     m_camera.reset();
     m_renderer.reset();

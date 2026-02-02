@@ -5,14 +5,6 @@
 #include <memory>
 #include <opencv2/opencv.hpp>
 
-// 前向声明 ONNX Runtime
-namespace Ort {
-    struct Session;
-    struct Env;
-    struct SessionOptions;
-    struct MemoryInfo;
-}
-
 namespace popcorn {
 
 /**
@@ -70,11 +62,16 @@ enum class MoveNetKeypoint {
 
 /**
  * 姿态检测器 (使用 ONNX Runtime + MoveNet)
+ * 使用 PIMPL 模式隐藏 ONNX Runtime 依赖
  */
 class PoseDetector {
 public:
     PoseDetector();
     ~PoseDetector();
+
+    // 禁止拷贝
+    PoseDetector(const PoseDetector&) = delete;
+    PoseDetector& operator=(const PoseDetector&) = delete;
 
     /**
      * 初始化检测器
@@ -118,6 +115,10 @@ private:
     DetectedPerson parseOutput(const float* output, int width, int height);
 
 private:
+    // PIMPL - 隐藏 ONNX Runtime 实现细节
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
+
     bool m_initialized{false};
     float m_lastDetectionTime{0.0f};
     float m_confidenceThreshold{0.3f};
@@ -125,12 +126,6 @@ private:
     // 模型输入尺寸 (MoveNet Lightning: 192x192, Thunder: 256x256)
     int m_inputWidth{192};
     int m_inputHeight{192};
-
-    // ONNX Runtime
-    std::unique_ptr<Ort::Env> m_env;
-    std::unique_ptr<Ort::Session> m_session;
-    std::unique_ptr<Ort::SessionOptions> m_sessionOptions;
-    std::unique_ptr<Ort::MemoryInfo> m_memoryInfo;
 };
 
 } // namespace popcorn

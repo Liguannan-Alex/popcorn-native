@@ -5,6 +5,7 @@
 #include "FallingItem.h"
 #include "CollisionSystem.h"
 #include "detection/PoseDetector.h"
+#include "detection/GestureDetector.h"
 
 namespace popcorn {
 
@@ -38,8 +39,10 @@ public:
      * 更新游戏逻辑
      * @param deltaTime 时间增量（秒）
      * @param persons 检测到的人物
+     * @param gesture 手势检测结果
      */
-    void update(float deltaTime, const std::vector<DetectedPerson>& persons);
+    void update(float deltaTime, const std::vector<DetectedPerson>& persons,
+                const GestureResult& gesture = GestureResult{});
 
     /**
      * 开始游戏

@@ -11,6 +11,7 @@ class Window;
 class Renderer;
 class CameraCapture;
 class PoseDetector;
+class GestureDetector;
 class GameEngine;
 
 /**
@@ -78,6 +79,7 @@ private:
     std::unique_ptr<Renderer> m_renderer;
     std::unique_ptr<CameraCapture> m_camera;
     std::unique_ptr<PoseDetector> m_poseDetector;
+    std::unique_ptr<GestureDetector> m_gestureDetector;
     std::unique_ptr<GameEngine> m_gameEngine;
 
     std::atomic<bool> m_running{false};

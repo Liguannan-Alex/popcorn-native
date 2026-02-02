@@ -69,6 +69,7 @@ set(SOURCES
     src/core/Renderer.cpp
     src/camera/CameraCapture.cpp
     src/detection/PoseDetector.cpp
+    src/detection/GestureDetector.cpp
     src/game/GameEngine.cpp
     src/game/CollisionSystem.cpp
 )
@@ -79,6 +80,7 @@ set(HEADERS
     src/core/Renderer.h
     src/camera/CameraCapture.h
     src/detection/PoseDetector.h
+    src/detection/GestureDetector.h
     src/game/GameEngine.h
     src/game/CollisionSystem.h
     src/game/FallingItem.h

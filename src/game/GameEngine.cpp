@@ -20,16 +20,27 @@ bool GameEngine::initialize(int width, int height) {
     return true;
 }
 
-void GameEngine::update(float deltaTime, const std::vector<DetectedPerson>& persons) {
+void GameEngine::update(float deltaTime, const std::vector<DetectedPerson>& persons,
+                        const GestureResult& gesture) {
     // 保存检测到的人物
     m_detectedPersons = persons;
 
     switch (m_state) {
         case GameState::Calibrating:
-            // 等待检测到玩家
+            // 等待检测到玩家并做出 OK 手势
             if (!persons.empty()) {
-                // 检测到玩家，可以开始游戏
-                std::cout << "[GameEngine] Player detected, ready to start\n";
+                // 检测到玩家
+                if (gesture.anyOkGesture()) {
+                    // 检测到 OK 手势，开始游戏！
+                    std::cout << "[GameEngine] OK gesture detected! Starting game...\n";
+                    startGame();
+                } else {
+                    // 显示提示：请做 OK 手势开始游戏
+                    static int hintCounter = 0;
+                    if (++hintCounter % 60 == 0) {  // 每秒提示一次
+                        std::cout << "[GameEngine] Player detected. Show OK gesture (👌) to start!\n";
+                    }
+                }
             }
             break;
 
