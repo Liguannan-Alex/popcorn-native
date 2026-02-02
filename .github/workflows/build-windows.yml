@@ -38,9 +38,9 @@ jobs:
           # 解压
           Expand-Archive -Path "onnxruntime.zip" -DestinationPath "onnxruntime_dml" -Force
 
-          # 创建目录结构
-          mkdir -p third_party/onnxruntime/include
-          mkdir -p third_party/onnxruntime/lib
+          # 创建目录结构（PowerShell 兼容方式）
+          New-Item -ItemType Directory -Force -Path third_party/onnxruntime/include | Out-Null
+          New-Item -ItemType Directory -Force -Path third_party/onnxruntime/lib | Out-Null
 
           # 复制文件
           cp onnxruntime_dml/build/native/include/* third_party/onnxruntime/include/
@@ -53,7 +53,8 @@ jobs:
 
       - name: Download MoveNet model
         run: |
-          mkdir -p assets/models
+          # 创建模型目录（PowerShell 兼容方式）
+          New-Item -ItemType Directory -Force -Path assets/models | Out-Null
           # 下载 MoveNet Lightning ONNX 模型
           Invoke-WebRequest -Uri "https://github.com/PINTO0309/PINTO_model_zoo/raw/main/115_MoveNet/resources/saved_model_192x192/model_float32.onnx" -OutFile "assets/models/movenet_lightning.onnx"
           Write-Host "Downloaded MoveNet model to assets/models/movenet_lightning.onnx"
@@ -71,7 +72,7 @@ jobs:
 
       - name: Prepare release package
         run: |
-          mkdir -p release/PopcornBattle
+          New-Item -ItemType Directory -Force -Path release/PopcornBattle | Out-Null
 
           # 复制可执行文件
           cp build/bin/${{ env.BUILD_TYPE }}/PopcornBattle.exe release/PopcornBattle/
