@@ -106,7 +106,7 @@ void PoseDetector::shutdown() {
 }
 
 cv::Mat PoseDetector::preprocessImage(const cv::Mat& frame) {
-    cv::Mat resized, rgb, floatImg;
+    cv::Mat resized, rgb;
 
     // BGR -> RGB
     cv::cvtColor(frame, rgb, cv::COLOR_BGR2RGB);
@@ -114,10 +114,8 @@ cv::Mat PoseDetector::preprocessImage(const cv::Mat& frame) {
     // 调整大小
     cv::resize(rgb, resized, cv::Size(m_inputWidth, m_inputHeight));
 
-    // 转换为 float32 并归一化到 [0, 1]
-    resized.convertTo(floatImg, CV_32F, 1.0 / 255.0);
-
-    return floatImg;
+    // 保持 uint8 格式，值范围 0-255（模型期望 int32，但值相同）
+    return resized;
 }
 
 DetectedPerson PoseDetector::parseOutput(const float* output, int frameWidth, int frameHeight) {
@@ -185,16 +183,18 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
         // 预处理
         cv::Mat input = preprocessImage(frame);
 
-        // 准备输入张量
+        // 准备输入张量 (int32 格式，值范围 0-255)
         std::vector<int64_t> inputShape = {1, m_inputHeight, m_inputWidth, 3};
         size_t inputSize = m_inputHeight * m_inputWidth * 3;
-        std::vector<float> inputData(inputSize);
+        std::vector<int32_t> inputData(inputSize);
 
-        // 复制数据 (HWC 格式)
-        std::memcpy(inputData.data(), input.data, inputSize * sizeof(float));
+        // 将 uint8 转换为 int32
+        for (size_t i = 0; i < inputSize; ++i) {
+            inputData[i] = static_cast<int32_t>(input.data[i]);
+        }
 
-        // 创建输入张量
-        Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
+        // 创建输入张量 (int32)
+        Ort::Value inputTensor = Ort::Value::CreateTensor<int32_t>(
             *m_memoryInfo,
             inputData.data(),
             inputSize,
