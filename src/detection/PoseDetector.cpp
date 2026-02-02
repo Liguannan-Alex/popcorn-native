@@ -7,6 +7,11 @@
 // ONNX Runtime
 #include <onnxruntime_cxx_api.h>
 
+#ifdef _WIN32
+// DirectML for GPU acceleration on Windows
+#include <dml_provider_factory.h>
+#endif
+
 namespace popcorn {
 
 PoseDetector::PoseDetector() = default;
@@ -35,9 +40,15 @@ bool PoseDetector::initialize(const std::string& modelPath) {
         m_sessionOptions->SetIntraOpNumThreads(2);
         m_sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
 
-        // 尝试使用 CUDA (如果可用)
-        // OrtCUDAProviderOptions cuda_options;
-        // m_sessionOptions->AppendExecutionProvider_CUDA(cuda_options);
+#ifdef _WIN32
+        // Windows: 尝试使用 DirectML (GPU via DirectX)
+        try {
+            OrtSessionOptionsAppendExecutionProvider_DML(*m_sessionOptions, 0);
+            std::cout << "[PoseDetector] DirectML GPU acceleration enabled\n";
+        } catch (...) {
+            std::cout << "[PoseDetector] DirectML not available, using CPU\n";
+        }
+#endif
 
         // 创建会话
 #ifdef _WIN32

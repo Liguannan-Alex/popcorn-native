@@ -23,7 +23,32 @@ jobs:
           git clone https://github.com/microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
-          .\vcpkg install sdl2:x64-windows opencv4:x64-windows glew:x64-windows onnxruntime-gpu:x64-windows
+          .\vcpkg install sdl2:x64-windows opencv4:x64-windows glew:x64-windows
+        shell: pwsh
+
+      - name: Download ONNX Runtime DirectML (GPU)
+        run: |
+          # 下载 ONNX Runtime 1.17.0 with DirectML (GPU via DirectX)
+          $onnxVersion = "1.17.0"
+          $onnxUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$onnxVersion/Microsoft.ML.OnnxRuntime.DirectML.$onnxVersion.zip"
+
+          Write-Host "Downloading ONNX Runtime DirectML $onnxVersion..."
+          Invoke-WebRequest -Uri $onnxUrl -OutFile "onnxruntime.zip"
+
+          # 解压
+          Expand-Archive -Path "onnxruntime.zip" -DestinationPath "onnxruntime_dml" -Force
+
+          # 创建目录结构
+          mkdir -p third_party/onnxruntime/include
+          mkdir -p third_party/onnxruntime/lib
+
+          # 复制文件
+          cp onnxruntime_dml/build/native/include/* third_party/onnxruntime/include/
+          cp onnxruntime_dml/runtimes/win-x64/native/*.dll third_party/onnxruntime/lib/
+          cp onnxruntime_dml/runtimes/win-x64/native/*.lib third_party/onnxruntime/lib/
+
+          Write-Host "ONNX Runtime DirectML installed to third_party/onnxruntime/"
+          Get-ChildItem third_party/onnxruntime -Recurse
         shell: pwsh
 
       - name: Download MoveNet model
@@ -38,7 +63,8 @@ jobs:
         run: |
           cmake -B build -G "Visual Studio 17 2022" -A x64 `
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DONNXRUNTIME_ROOT="${{ github.workspace }}/third_party/onnxruntime"
 
       - name: Build
         run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
@@ -57,11 +83,16 @@ jobs:
 
           # 复制 vcpkg 安装的 DLL
           $vcpkgBin = "${{ github.workspace }}/vcpkg/installed/x64-windows/bin"
-
-          # 复制所有 DLL
           Get-ChildItem "$vcpkgBin" -Filter "*.dll" | ForEach-Object {
             cp $_.FullName "release/PopcornBattle/$($_.Name)"
-            Write-Host "Copied: $($_.Name)"
+            Write-Host "vcpkg: $($_.Name)"
+          }
+
+          # 复制 ONNX Runtime DirectML DLLs
+          $onnxLib = "${{ github.workspace }}/third_party/onnxruntime/lib"
+          Get-ChildItem "$onnxLib" -Filter "*.dll" | ForEach-Object {
+            cp $_.FullName "release/PopcornBattle/$($_.Name)"
+            Write-Host "ONNX: $($_.Name)"
           }
 
           # 列出最终文件
