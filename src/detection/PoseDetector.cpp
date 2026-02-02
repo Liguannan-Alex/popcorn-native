@@ -220,8 +220,38 @@ std::vector<DetectedPerson> PoseDetector::detect(const cv::Mat& frame) {
             1
         );
 
+        // 获取输出形状并打印调试信息
+        auto outputInfo = outputTensors[0].GetTensorTypeAndShapeInfo();
+        auto outputShape = outputInfo.GetShape();
+
+        static int debugCount = 0;
+        if (debugCount < 5) {
+            std::cout << "[PoseDetector] Output shape: ";
+            for (auto dim : outputShape) {
+                std::cout << dim << " ";
+            }
+            std::cout << "\n";
+        }
+
         // 解析输出
         float* outputData = outputTensors[0].GetTensorMutableData<float>();
+
+        // 打印前几个关键点的原始值（调试用）
+        if (debugCount < 5) {
+            std::cout << "[PoseDetector] Raw output (first 10 values): ";
+            for (int i = 0; i < 10 && i < static_cast<int>(outputInfo.GetElementCount()); ++i) {
+                std::cout << outputData[i] << " ";
+            }
+            std::cout << "\n";
+
+            // 打印左手腕 (index 9) 和右手腕 (index 10) 的值
+            std::cout << "[PoseDetector] LeftWrist (idx 9): y=" << outputData[9*3+0]
+                      << " x=" << outputData[9*3+1] << " conf=" << outputData[9*3+2] << "\n";
+            std::cout << "[PoseDetector] RightWrist (idx 10): y=" << outputData[10*3+0]
+                      << " x=" << outputData[10*3+1] << " conf=" << outputData[10*3+2] << "\n";
+            debugCount++;
+        }
+
         DetectedPerson person = parseOutput(outputData, frame.cols, frame.rows);
 
         // 只有检测到有效关键点才添加
