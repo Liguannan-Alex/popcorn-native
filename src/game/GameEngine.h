@@ -61,10 +61,15 @@ public:
 
     // Getters
     GameState getState() const { return m_state; }
-    int getScore() const { return m_score; }
+    int getP1Score() const { return m_p1Score; }
+    int getP2Score() const { return m_p2Score; }
+    int getScore() const { return m_p1Score + m_p2Score; }  // 兼容旧代码
     float getRemainingTime() const { return m_remainingTime; }
     const std::vector<FallingItem>& getFallingItems() const { return m_fallingItems; }
     const std::vector<DetectedPerson>& getDetectedPersons() const { return m_detectedPersons; }
+    GamePhase getPhase() const { return m_phase; }
+    int getP1Combo() const { return m_p1Combo; }
+    int getP2Combo() const { return m_p2Combo; }
 
 private:
     // 生成掉落物
@@ -81,10 +86,22 @@ private:
     int m_height{0};
 
     GameState m_state{GameState::Calibrating};
-    int m_score{0};
-    float m_remainingTime{60.0f};   // 游戏时长（秒）
+    GamePhase m_phase{GamePhase::Warmup};
+
+    // 分数（双人）
+    int m_p1Score{0};
+    int m_p2Score{0};
+
+    // 连击（双人）
+    int m_p1Combo{0};
+    int m_p2Combo{0};
+    float m_p1ComboTimer{0.0f};
+    float m_p2ComboTimer{0.0f};
+
+    float m_gameTime{0.0f};         // 游戏进行时间
+    float m_remainingTime{GameSettings::GAME_DURATION};   // 剩余时间
     float m_spawnTimer{0.0f};
-    float m_spawnInterval{0.5f};    // 生成间隔（秒）
+    float m_spawnInterval{0.25f};   // 生成间隔（秒）
 
     std::vector<FallingItem> m_fallingItems;
     std::vector<DetectedPerson> m_detectedPersons;
@@ -92,6 +109,9 @@ private:
     std::unique_ptr<CollisionSystem> m_collisionSystem;
 
     int m_nextItemId{0};
+
+    // 更新游戏阶段
+    void updatePhase();
 };
 
 } // namespace popcorn

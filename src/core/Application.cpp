@@ -185,7 +185,16 @@ void Application::render() {
         }
 
         // 渲染 UI（分数、时间等）
-        m_renderer->renderUI(m_gameEngine->getScore(), m_gameEngine->getRemainingTime(), m_fps, m_detectionTime);
+        m_renderer->renderUI(
+            m_gameEngine->getP1Score(),
+            m_gameEngine->getP2Score(),
+            m_gameEngine->getRemainingTime(),
+            m_fps,
+            m_detectionTime,
+            m_gameEngine->getPhase(),
+            m_gameEngine->getP1Combo(),
+            m_gameEngine->getP2Combo()
+        );
     }
 
     m_renderer->endFrame();
